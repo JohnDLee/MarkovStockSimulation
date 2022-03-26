@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from tqdm import tqdm, trange
-import os
 
 class BaseSim:
     
@@ -10,36 +9,42 @@ class BaseSim:
         # set up states
         self.states = list(states)
         # initialize P
-        self.P = dict(zip(list(states), [dict(zip(list(states), [-1 for i in range(len(states))])) for i in range(len(states))]))
+        self.P = dict(zip(list(states), [dict(zip(list(states), [0 for i in range(len(states))])) for i in range(len(states))]))
         self.M = dict(zip(list(states), [ 0 for i in range(len(states))]))
         self.STD = dict(zip(list(states), [ 0 for i in range(len(states))]))
         
+        self.ret_colname = None
         self.strategies = ['B&H'] # only B&H for now
         
     def reset(self):
-        self.__init__(self.states)
+        ret_colname = self.ret_colname # preserve colname
+        self.__init__()
+        self.ret_colname = ret_colname 
+        
     ####################
     # Simulation Fuction
     ####################
     
-    def run_simulation(self, runs: int, data: pd.DataFrame, ret_colname = 'returns', split: list = [.5, .5], pred_period = 140):
+    def run_simulation(self, runs: int, data: pd.DataFrame, ret_colname = 'returns', split: list = [.5, .5], pred_period = 140, drop_last_incomplete_period = True):
         ''' Runs entire simulation and saves metrics
         Data Provided should already cleaned and ready to use. Must have a minimum of periodic returns as a column
         compute the start state of the simulation.
         
+        
         Returns:
-            Simulation data as a numpy, where each time period is [predicted, true]'''
+            Simulation data as a numpy, where each time period is [predicted, true].
+            If drop_last_incomplete_period is true simulation data does not include the last time period if the data does not complete an entire prediction period'''
         
         self.ret_colname = ret_colname
         
         # split data into train and test
-        train_len = split[0] * len(data)
-        train_data = data[:train_len].copy()
-        test_data = data[train_len:].copy()
+        train_len = int(split[0] * len(data))
+        train_data = data.iloc[:train_len].copy()
+        test_data = data.iloc[train_len:].copy()
         
         self.train(train_data)
         
-        runs = []
+        run_data = []
         # Monte Carlo Simulation
         for run in trange(runs, desc = 'Runs Completed'):
             
@@ -53,10 +58,11 @@ class BaseSim:
                 if time_step % pred_period == 0 and time_step != 0:
                     
                     # if it isn't first period, append the previous 140 and remove from test
-                    train_data.append(test_data[time_step-pred_period:time_step].copy())
+                    pd.concat([train_data, test_data.iloc[time_step-pred_period:time_step].copy()])
                     
                     # save pred_periods worth of data into an array
                     sim.append(testn)
+
                     testn = [] # reset testn
                     
                     # retrain
@@ -64,11 +70,10 @@ class BaseSim:
                     
                     
                 # modifieable test_step
-                self.test_step(test_data)
+                self.test_step(train_data, test_data)
                 
                 # compute a return using normal distribution and save it w/ true value
-                testn.append([np.random.normal(loc = self.M[cur_state], scale = self.STD[cur_state]), test_data[time_step][self.ret_colname]] )
-                
+                testn.append([np.random.normal(loc = self.M[cur_state], scale = self.STD[cur_state]), test_data.iloc[time_step][self.ret_colname]] )
                 # select the next state
                 prob = np.random.uniform(0, 1)
                 state_prob = 0
@@ -77,14 +82,18 @@ class BaseSim:
                     if prob < state_prob:
                         cur_state = state # set the next state
                         break
-            # capture last piece of data
-            sim.append(testn)
+                    
+            # ffill last value to match same length for numpy conversion
+            if not drop_last_incomplete_period and pred_period - len(testn) != 0:
+                testn += [testn[-1] for i in range(pred_period - len(testn))]
+                # capture last piece of data
+                sim.append(testn)
+            
             # save to our runs
-            runs.append(sim) 
+            run_data.append(sim) 
         
-        del self.ret_colname
         
-        return np.array(runs)
+        return np.array(run_data)
 
     ###########################
     # Custom Functions to be defined in child classes
@@ -96,7 +105,7 @@ class BaseSim:
         Return the start state"""
         pass
     
-    def train(self, training_data: pd.DataFrame):
+    def train(self, train_data: pd.DataFrame):
         """Modify this step to initially fill self.P with transition probs, self.M with mean returns, and self.STD with std of returns for each state.
         
         You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
@@ -104,7 +113,7 @@ class BaseSim:
         Do not Return"""
         pass
     
-    def test_step(self, test_data: pd.DataFrame):
+    def test_step(self, train_data:pd.DataFrame, test_data: pd.DataFrame):
         """Modify this test step to change P or perform other operations if necessary before computing return for that time period
         
         Do Not Return"""
@@ -119,8 +128,9 @@ class BaseSim:
         for strat in self.strategies:
             print(f'\t{strat}')
     
-    def compute_metrics(self, run_data: np.array, strategy = 'B&H'):
+    def compute_metrics(self, run_data: np.array, strategy = 'B&H', rfrate = .02):
         '''Should feed in simulation data after running. Will compute P/L (strategy), Sharpe, Loss
+        Does not accept simulation data with Nans in it.
         run_data:
             Outer Layer = 0 - runs # of simulations
             Layer 2 = 0 - # of test periods
@@ -129,8 +139,8 @@ class BaseSim:
             
         returns a dictionary of computed strategies'''
             
-        pnl = self.PnL(run_data, strategy)
-        sharpe = self.Sharpe(run_data, pnl)
+        pnl = self.PnL(run_data, strategy, log = True)
+        sharpe = self.Sharpe( np.exp(pnl), rfrate = rfrate)
         corr = self.corr(run_data)
         smape = self.SMAPE(run_data)
         
@@ -138,37 +148,90 @@ class BaseSim:
         
         
         
-    def PnL(self, run_data: np.array, strategy = 'B&H'):
+    def PnL(self, run_data: np.array, strategy = 'B&H', log = True):
         """Compute P/L on run_data with strategy.
         
         Return a 2-d array of where:
             Outer Layer = 0 - runs # of simulations
-            Layer 2 = 0 - # of test periods P/L calculations
+            Layer 2 = 0 - # of test periods log P/L calculations
             """
-        return
+        
+        if strategy == 'B&H':
+            pnl = []
+            for sim in run_data:
+                pnl_sim = []
+                for period in sim:
+                    expected_log_ret = period[:, 0].sum() # expected
+                    actual_log_ret = period[:, 1].sum() # actual
+                    
+                    # check if profit or loss
+                    # profit if actual matches expected dir
+                    # loss if actual differs from expected
+                    if actual_log_ret >= 0:
+                        if expected_log_ret >= 0:
+                            pnl_sim.append(actual_log_ret)
+                        else:
+                            pnl_sim.append(actual_log_ret * -1)
+                    else:
+                        if expected_log_ret < 0:
+                            pnl_sim.append(actual_log_ret * -1)
+                        else:
+                            pnl_sim.append(actual_log_ret)
+                            
+                pnl.append(pnl_sim)
+        pnl = np.array(pnl)
+        if log:
+            return pnl 
+            
+        return np.exp(pnl)
 
-    def Sharpe(self, run_data: np.array, PnL_data: np.array):
-        """ Computes sharpe using run_data and data computed from PnL,
+    def Sharpe(self, PnL_data: np.array, rfrate = .02):
+        """ Computes sharpe over time with unlogged data computed from PnL,
             Return a 2-d array of where:
                 Outer Layer = 0 - runs # of simulations
                 Layer 2 = 0 - # of test periods Sharpe calculations
+                the first pnl will be NaN
             
         """
-        return
+        sharpe = []
+        for sim in PnL_data:
+            sharpe_sim = [np.nan]
+            for plindex in range(1, len(sim)):
+                sharpe_sim.append((PnL_data[:plindex+1].mean() - rfrate)/PnL_data[:plindex+1].std())
+            sharpe.append(sharpe_sim)
+            
+        return np.array(sharpe)
     
     def corr(self, run_data: np.array):
-        """ Computes correlation of predicted model to true data
+        """ Computes correlation of predicted model returns to true data returns
             Return a 2-d array of where:
                 Outer Layer = 0 - runs # of simulations
                 Layer 2 = 0 - # of test periods Corr calculations"""
-        return
+        corrs = []
+        for sim in run_data:
+            corr_sim = []
+            for period in sim:
+                expected_log_ret = np.exp(period[:, 0]) # expected
+                actual_log_ret = np.exp(period[:, 1]) # actual
+                corr_sim.append(np.corrcoef(expected_log_ret, actual_log_ret))
+            corrs.append(corr_sim)
+        return np.array(corrs)
 
     def SMAPE(self, run_data: np.array):
         """ Computes correlation of predicted model to true data
             Return a 2-d array of where:
                 Outer Layer = 0 - runs # of simulations
                 Layer 2 = 0 - # of test periods SMAPE calculations"""
-        return
+        smapes = []
+        for sim in run_data:
+            smape_sim = []
+            for period in sim:
+                expected_log_ret = np.exp(period[:, 0]) # expected
+                actual_log_ret = np.exp(period[:, 1]) # actual
+                smape = 100/len(actual_log_ret) * np.sum(2 * np.abs(expected_log_ret - actual_log_ret) / (np.abs(actual_log_ret) + np.abs(expected_log_ret)))
+                smape_sim.append(smape) 
+            smapes.append(smape_sim)
+        return np.array(smapes)
     
 
     #########################

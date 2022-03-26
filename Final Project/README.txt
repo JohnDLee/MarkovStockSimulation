@@ -2,7 +2,7 @@ install requirements by running
 
 % pip install -r requirements.txt
 
-
+Run retrieve_data.py after to retrieve data into a data folder
 
 
 
