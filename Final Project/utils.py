@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from tqdm import tqdm, trange
-import os
 
 class BaseSim:
     
@@ -10,14 +9,18 @@ class BaseSim:
         # set up states
         self.states = list(states)
         # initialize P
-        self.P = dict(zip(list(states), [dict(zip(list(states), [-1 for i in range(len(states))])) for i in range(len(states))]))
+        self.P = dict(zip(list(states), [dict(zip(list(states), [0 for i in range(len(states))])) for i in range(len(states))]))
         self.M = dict(zip(list(states), [ 0 for i in range(len(states))]))
         self.STD = dict(zip(list(states), [ 0 for i in range(len(states))]))
         
+        self.ret_colname = None
         self.strategies = ['B&H'] # only B&H for now
         
     def reset(self):
+        ret_colname = self.ret_colname # preserve colname
         self.__init__(self.states)
+        self.ret_colname = ret_colname 
+        
     ####################
     # Simulation Fuction
     ####################
@@ -64,7 +67,7 @@ class BaseSim:
                     
                     
                 # modifieable test_step
-                self.test_step(test_data)
+                self.test_step(train_data, test_data)
                 
                 # compute a return using normal distribution and save it w/ true value
                 testn.append([np.random.normal(loc = self.M[cur_state], scale = self.STD[cur_state]), test_data[time_step][self.ret_colname]] )
@@ -82,7 +85,6 @@ class BaseSim:
             # save to our runs
             runs.append(sim) 
         
-        del self.ret_colname
         
         return np.array(runs)
 
@@ -96,7 +98,7 @@ class BaseSim:
         Return the start state"""
         pass
     
-    def train(self, training_data: pd.DataFrame):
+    def train(self, train_data: pd.DataFrame):
         """Modify this step to initially fill self.P with transition probs, self.M with mean returns, and self.STD with std of returns for each state.
         
         You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
@@ -104,7 +106,7 @@ class BaseSim:
         Do not Return"""
         pass
     
-    def test_step(self, test_data: pd.DataFrame):
+    def test_step(self, train_data:pd.DataFrame, test_data: pd.DataFrame):
         """Modify this test step to change P or perform other operations if necessary before computing return for that time period
         
         Do Not Return"""
