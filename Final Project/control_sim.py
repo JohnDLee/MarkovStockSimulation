@@ -41,8 +41,8 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             return 'Bear'
     
     
-    def train(self, train_data: pd.DataFrame):
-        ''' This Train just recomputes probability over all time. No weights for nearer times'''
+    def init_train(self, train_data: pd.DataFrame):
+        ''' This Train just recomputes probability over all time. No weights for nearer times. This is just the initial train'''
         # Compute self.P on the training data
         # use ret_colname
         
@@ -84,6 +84,61 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
         # return nothing
         return
     
+    def retrain(self, last_month: pd.DataFrame):
+        ''' This reTrain just recomputes probability over the last month, then averages it with the current data to form an exponential weighting of sorts. Most of the code is the same, just only on the last_month. The difference is the averaging at the end'''
+        
+        # Compute self.P on the training data
+        # use ret_colname
+
+        # do not reset data
+        
+        # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
+        # Create a copy of each state !!!!!!!!!!!!!!
+        P = self.P.copy()
+        M = self.M.copy()
+        STD = self.STD.copy()
+        rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
+        
+        for rowid in range(len(last_month) - 1):
+            cur_ret = last_month.iloc[rowid][self.ret_colname]
+            next_ret = last_month.iloc[rowid + 1][self.ret_colname]
+            
+            cur_state = self.det_state(cur_ret) # helper method defined below
+            next_state = self.det_state(next_ret)
+            
+            # use P to keep track of counts first
+            P[cur_state][next_state] += 1
+            # std/M is more involved
+            rets[cur_state].append(cur_ret)
+        
+        # compute P, STD, M
+        for state in self.states:
+            
+            # compute the totals for each row
+            state_total = 0
+            for next_state in self.states:
+                state_total += self.P[state][next_state]
+                
+            # compute the Probs
+            for next_state in self.states:
+                self.P[state][next_state] = self.P[state][next_state]/state_total
+                
+            ret = np.array(rets[state])
+            # compute self.M/self.STD
+            M[state] = ret.mean()
+            STD[state] = ret.std()
+        
+        # Now recompute self.P, self.STD, self.M
+        for state in self.states:
+            for next_state in self.states:
+                self.P[state][next_state] = (self.P[state][next_state] + P[state][next_state])/2
+                
+            self.M[state] = (self.M[state] + M[state])/2
+            self.STD[state] = (self.STD[state] + STD[state])/2
+            
+        # return nothing
+        return
+    
     def test_step(self, train_data: pd.DataFrame,  test_data: pd.DataFrame):
         # Nothing needs to be done in the test step for the control case, but you can adjust self.P and self.M and self.V
         return
@@ -112,7 +167,7 @@ if __name__ == '__main__':
         data[ticker] = pd.read_csv(filepath_or_buffer=os.path.join('data/clean_data/', file), header=0, index_col = 0, parse_dates=True, infer_datetime_format=True) # read data correctly
     
 
-    runs = 1 # for testing
+    runs = 100 # for testing
     # send out ray multiprocess remote operation (Should not need to change this part)
     sims = []
     metrics = []

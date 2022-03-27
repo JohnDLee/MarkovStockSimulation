@@ -43,10 +43,12 @@ class BaseSim:
         
         # split data into train and test
         train_len = int(split[0] * len(data))
-        train_data = data.iloc[:train_len].copy()
+        train_data = data.iloc[:train_len-pred_period].copy()
+        last_month = data.iloc[train_len - pred_period:train_len].copy()
         test_data = data.iloc[train_len:].copy()
         
-        self.train(train_data)
+        self.init_train(train_data)
+        self.retrain(last_month)
         
         run_data = []
         # Monte Carlo Simulation
@@ -56,13 +58,14 @@ class BaseSim:
             testn = []
             cur_state = self.compute_startstate(test_data)
             # iterate through test data
-            for time_step in trange(len(test_data), desc = 'Timestep'):
+            for time_step in range(len(test_data)):
                 
                 # every pred_period of data, add data to test data
                 if time_step % pred_period == 0 and time_step != 0:
                     
-                    # if it isn't first period, append the previous 140 and remove from test
-                    pd.concat([train_data, test_data.iloc[time_step-pred_period:time_step].copy()])
+                    # if it isn't first period, append the previous 140 and get the last month
+                    train_data = pd.concat([train_data, last_month])
+                    last_month = test_data.iloc[time_step-pred_period:time_step].copy()
                     
                     # save pred_periods worth of data into an array
                     sim.append(testn)
@@ -70,7 +73,7 @@ class BaseSim:
                     testn = [] # reset testn
                     
                     # retrain
-                    self.train(train_data)
+                    self.retrain(last_month)
                     
                     
                 # modifieable test_step
@@ -109,8 +112,16 @@ class BaseSim:
         Return the start state"""
         pass
     
-    def train(self, train_data: pd.DataFrame):
+    def init_train(self, train_data: pd.DataFrame):
         """Modify this step to initially fill self.P with transition probs, self.M with mean returns, and self.STD with std of returns for each state.
+        
+        You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
+        
+        Do not Return"""
+        pass
+    
+    def retrain(self, last_month: pd.DataFrame):
+        """Modify this step to continualy update self.P with transition probs, self.M with mean returns, and self.STD with std of returns for each state.
         
         You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
         
@@ -132,7 +143,7 @@ class BaseSim:
         for strat in self.strategies:
             print(f'\t{strat}')
     
-    def compute_metrics(self, run_data: np.array, strategy = 'B&H', rfrate = .02):
+    def compute_metrics(self, run_data: np.array, strategy = 'B&H', rfrate = 0):
         '''Should feed in simulation data after running. Will compute P/L (strategy), Sharpe, Loss
         Does not accept simulation data with Nans in it.
         run_data:
@@ -189,7 +200,7 @@ class BaseSim:
             
         return np.exp(pnl) - 1
 
-    def Sharpe(self, PnL_data: np.array, rfrate = .02):
+    def Sharpe(self, PnL_data: np.array, rfrate = 0):
         """ Computes sharpe over time with unlogged data computed from PnL,
             Return a 2-d array of where:
                 Outer Layer = 0 - runs # of simulations

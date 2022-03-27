@@ -82,3 +82,9 @@ Steps:
 
 
     tkomeiji20
+
+
+
+    For PnL, Avg expectations of all runs? then compute PnL, etc.
+    Sharpe Changes
+    Compute Corr and Smape on the median, min max runs etc.
