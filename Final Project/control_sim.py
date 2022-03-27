@@ -76,7 +76,7 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             for next_state in self.states:
                 self.P[state][next_state] = self.P[state][next_state]/state_total
                 
-            ret = np.array(rets[cur_state])
+            ret = np.array(rets[state])
             # compute self.M/self.STD
             self.M[state] = ret.mean()
             self.STD[state] = ret.std()
@@ -107,6 +107,7 @@ if __name__ == '__main__':
     # load data
     data = {}
     for file in os.listdir('data/clean_data'):
+        print(file)
         ticker = file.split('.')[0] # retrieve ticker_name
         data[ticker] = pd.read_csv(filepath_or_buffer=os.path.join('data/clean_data/', file), header=0, index_col = 0, parse_dates=True, infer_datetime_format=True) # read data correctly
     
@@ -136,9 +137,9 @@ if __name__ == '__main__':
         sims.append(sim_data)
         metrics.append(metric_data)
     
-    # get data once it is ready ( not necessary since the data is saved, so this is for testing)
-    #sims = ray.get(sims)
-    #metrics = ray.get(metrics)
+    # get data once it is ready 
+    sims = ray.get(sims)
+    metrics = ray.get(metrics)
     
     #print(sims[0])
     ray.shutdown()

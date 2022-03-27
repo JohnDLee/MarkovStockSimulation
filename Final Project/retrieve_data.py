@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # retrieve data as far back as possible. Constant end date to remain consistent
     for ticker in tqdm( tickers, desc = 'Tickers'):
         
-        ohlc = rest.get_bars(ticker, timeframe = api.TimeFrame(1, unit= api.TimeFrameUnit('Hour')), start = '2000-01-01', end = '2022-03-26').df
+        ohlc = rest.get_bars(ticker, timeframe = api.TimeFrame(1, unit= api.TimeFrameUnit('Hour')), start = '2000-01-01', end = '2022-03-26', adjustment = 'all').df
         
         # save this raw data
         ohlc.to_csv(f'data/raw_data/{ticker}.csv', index = True, header = True)

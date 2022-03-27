@@ -14,18 +14,21 @@ class BaseSim:
         self.STD = dict(zip(list(states), [ 0 for i in range(len(states))]))
         
         self.ret_colname = None
+        self.close_colname = None
         self.strategies = ['B&H'] # only B&H for now
         
     def reset(self):
         ret_colname = self.ret_colname # preserve colname
+        close_colname = self.close_colname
         self.__init__()
-        self.ret_colname = ret_colname 
+        self.ret_colname = ret_colname
+        self.close_colname = close_colname 
         
     ####################
     # Simulation Fuction
     ####################
     
-    def run_simulation(self, runs: int, data: pd.DataFrame, ret_colname = 'returns', split: list = [.5, .5], pred_period = 140, drop_last_incomplete_period = True):
+    def run_simulation(self, runs: int, data: pd.DataFrame, ret_colname = 'log_returns', close_colname = 'close',  split: list = [.5, .5], pred_period = 140, drop_last_incomplete_period = True):
         ''' Runs entire simulation and saves metrics
         Data Provided should already cleaned and ready to use. Must have a minimum of periodic returns as a column
         compute the start state of the simulation.
@@ -36,6 +39,7 @@ class BaseSim:
             If drop_last_incomplete_period is true simulation data does not include the last time period if the data does not complete an entire prediction period'''
         
         self.ret_colname = ret_colname
+        self.close_colname = close_colname
         
         # split data into train and test
         train_len = int(split[0] * len(data))
@@ -73,7 +77,7 @@ class BaseSim:
                 self.test_step(train_data, test_data)
                 
                 # compute a return using normal distribution and save it w/ true value
-                testn.append([np.random.normal(loc = self.M[cur_state], scale = self.STD[cur_state]), test_data.iloc[time_step][self.ret_colname]] )
+                testn.append([np.random.normal(loc = self.M[cur_state], scale = self.STD[cur_state]), test_data.iloc[time_step][self.ret_colname], test_data.iloc[time_step][self.close_colname]] )
                 # select the next state
                 prob = np.random.uniform(0, 1)
                 state_prob = 0
@@ -140,7 +144,7 @@ class BaseSim:
         returns a dictionary of computed strategies'''
             
         pnl = self.PnL(run_data, strategy, log = True)
-        sharpe = self.Sharpe( np.exp(pnl), rfrate = rfrate)
+        sharpe = self.Sharpe( np.exp(pnl) -1, rfrate = rfrate)
         corr = self.corr(run_data)
         smape = self.SMAPE(run_data)
         
@@ -183,7 +187,7 @@ class BaseSim:
         if log:
             return pnl 
             
-        return np.exp(pnl)
+        return np.exp(pnl) - 1
 
     def Sharpe(self, PnL_data: np.array, rfrate = .02):
         """ Computes sharpe over time with unlogged data computed from PnL,
@@ -197,7 +201,8 @@ class BaseSim:
         for sim in PnL_data:
             sharpe_sim = [np.nan]
             for plindex in range(1, len(sim)):
-                sharpe_sim.append((PnL_data[:plindex+1].mean() - rfrate)/PnL_data[:plindex+1].std())
+                s = (sim[:plindex + 1].mean() - rfrate)/sim[:plindex+1].std()
+                sharpe_sim.append(s)
             sharpe.append(sharpe_sim)
             
         return np.array(sharpe)
@@ -211,9 +216,9 @@ class BaseSim:
         for sim in run_data:
             corr_sim = []
             for period in sim:
-                expected_log_ret = np.exp(period[:, 0]) # expected
-                actual_log_ret = np.exp(period[:, 1]) # actual
-                corr_sim.append(np.corrcoef(expected_log_ret, actual_log_ret))
+                expected_log_ret = np.exp(period[:, 0]) - 1 # expected
+                actual_log_ret = np.exp(period[:, 1]) - 1# actual
+                corr_sim.append(np.corrcoef(expected_log_ret, actual_log_ret)[0][1])
             corrs.append(corr_sim)
         return np.array(corrs)
 
@@ -226,8 +231,8 @@ class BaseSim:
         for sim in run_data:
             smape_sim = []
             for period in sim:
-                expected_log_ret = np.exp(period[:, 0]) # expected
-                actual_log_ret = np.exp(period[:, 1]) # actual
+                expected_log_ret = np.exp(period[:, 0]) - 1 # expected
+                actual_log_ret = np.exp(period[:, 1]) - 1# actual
                 smape = 100/len(actual_log_ret) * np.sum(2 * np.abs(expected_log_ret - actual_log_ret) / (np.abs(actual_log_ret) + np.abs(expected_log_ret)))
                 smape_sim.append(smape) 
             smapes.append(smape_sim)
