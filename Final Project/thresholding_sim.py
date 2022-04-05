@@ -15,8 +15,10 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
     def __init__(self):
         
         # define the states (the code should work with whatever state names you give it.)
-        percentages = [-0.05, -0.02, -0.01, 0.00, 0.01, 0.02, 0.05]
-        states = [f'{"Bear" if percentage <= 0 else "Bull"} {percentage}' for percentage in percentages].append('Bull >0.05')
+        self.percentages = [-0.005, -0.002, -0.001, 0.000, 0.001, 0.002, 0.005]
+        states = [f'{"Bear" if percentage <= 0 else "Bull"} {percentage:.3f}' for percentage in self.percentages]
+        states.append("Bull >0.005")
+        # print(states)
         # Call the Base Sim's init method to init self.P, self.M, self.STD, self.states, self.strategies, and self.ret_colname
         super().__init__(states = states)
         
@@ -35,7 +37,7 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
         Return the start state"""
         first = test_data.iloc[0][self.ret_colname]
 
-        return self.ret_state(first)
+        return self.det_state(first)
     
     
     def init_train(self, train_data: pd.DataFrame):
@@ -52,6 +54,7 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
         for rowid in range(len(train_data) - 1):
             cur_ret = train_data.iloc[rowid][self.ret_colname]
             next_ret = train_data.iloc[rowid + 1][self.ret_colname]
+
             
             # Helpers defined above
             cur_state = self.det_state(cur_ret) 
@@ -63,17 +66,19 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
             # std/M is more involved
             rets[cur_state].append(cur_ret)
         
+
         # compute self.P, self.STD and self.M
         for state in self.states:
             
             # compute the totals for each row
             state_total = 0
             for next_state in self.states:
+                # print(self.P)
                 state_total += self.P[state][next_state]
                 
             # compute the Probs
             for next_state in self.states:
-                self.P[state][next_state] = self.P[state][next_state]/state_total
+                self.P[state][next_state] = self.P[state][next_state] / state_total
                 
             ret = np.array(rets[state])
             # compute self.M/self.STD
@@ -137,16 +142,16 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
     def det_state(self, ret):
         '''Computes state of return, returns state'''
         # Populate states
-        states = [float(state[-4:]) for state in self.states]
+        states = self.percentages
         
         # Remove the greater than
-        states.pop()
+        # states.pop()
 
         # Determine current state
         for state in states:
             if ret < state:
-                return f'{"Bear" if ret < 0 else "Bull"} {state}'
-        return 'Bull >0.05'
+                return f'{"Bear " if ret < 0 else "Bull "}{state:.3f}'
+        return 'Bull >0.005'
         
 if __name__ == '__main__':
     
