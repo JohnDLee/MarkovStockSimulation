@@ -1,4 +1,3 @@
-from msilib.schema import Control
 from utils import BaseSim
 import pandas as pd
 import numpy as np

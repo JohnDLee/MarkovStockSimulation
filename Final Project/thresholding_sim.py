@@ -1,4 +1,4 @@
-from msilib.schema import Control
+
 from utils import BaseSim
 import pandas as pd
 import numpy as np
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     ray.init(include_dashboard = False)
     
     # set up dirs in results we will use (this will be changed)
-    results_dir = 'results/Control'
+    results_dir = 'results/Thresholding'
     os.system(f'rm -rf {results_dir}')
     os.mkdir(results_dir)
     
@@ -178,7 +178,7 @@ if __name__ == '__main__':
         os.mkdir(ticker_path)
         
         # send remote actor
-        threshold = Control.remote()
+        threshold = ThresholdingSim.remote()
         sim_data = threshold.run_simulation.remote(runs = runs, data = ohlc, ret_colname = 'log_returns', split = [.5, .5], pred_period = 140, drop_last_incomplete_period = True) # 140 for a month
         metric_data = threshold.compute_metrics.remote(sim_data)
         
@@ -189,7 +189,7 @@ if __name__ == '__main__':
         
         ticker_order.append(ticker)
         sims.append(sim_data)
-        metrics.append(metric_data)
+        metrics.append(metric_data) 
     
     # get data once it is ready 
     sims = ray.get(sims)
