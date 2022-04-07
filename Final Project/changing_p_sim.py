@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from tqdm import tqdm
+import datetime
 
 # faster processing with ray
 import ray
@@ -16,9 +17,16 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
         # define the states (the code should work with whatever state names you give it.)
         states = ['Bear', 'Bull']
         
+        
         # Call the Base Sim's init method to init self.P, self.M, self.STD, self.states, self.strategies, and self.ret_colname
         super().__init__(states = states)
-        
+        days = ['Mo', 'Tu', 'We', 'Th', 'F']
+        hours = [9, 10, 11, 12, 13, 14, 15]
+        self.allP = pd.DataFrame()
+        for day in days:
+            self.allP[day] = pd.DataFrame()
+            for hour in hours:
+                self.allP[day][hour] = self.P.copy()
         # Any other attributes needed
         # None for this case
         
@@ -58,8 +66,11 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             cur_state = self.det_state(cur_ret) # helper method defined below
             next_state = self.det_state(next_ret)
             
+            time_string = train_data.iloc[rowid]['timestamp'].split()
+            day = datetime.datetime.strptime(time_string, '%Y-%m-%d')
+            time = int(time_string[1][:2])
             # just use self.P to keep track of counts first
-            self.P[cur_state][next_state] += 1
+            self.allP[day][time][cur_state][next_state] += 1
             # std/M is more involved
             rets[cur_state].append(cur_ret)
         
@@ -138,6 +149,11 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
         # return nothing
         return
     
+    def test_step(self, train_data: pd.DataFrame,  test_data: pd.DataFrame):
+        # Nothing needs to be done in the test step for the control case, but you can adjust self.P and self.M and self.V
+        
+        return
+        
     # can write extra functions like this to be used in train
     def det_state(self, ret):
         if ret >= 0:

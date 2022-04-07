@@ -135,9 +135,6 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
         
         return
     
-    def test_step(self, train_data: pd.DataFrame,  test_data: pd.DataFrame):
-        # Nothing needs to be done in the test step for the control case, but you can adjust self.P and self.M and self.V
-        return
         
     def det_state(self, ret):
         '''Computes state of return, returns state'''

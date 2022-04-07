@@ -77,7 +77,7 @@ class BaseSim:
                     
                     
                 # modifieable test_step
-                self.test_step(train_data, test_data)
+                self.test_step(train_data, last_month, test_data, time_step)
                 
                 # compute a return using normal distribution and save it w/ true value
                 testn.append([np.random.normal(loc = self.M[cur_state], scale = self.STD[cur_state]), test_data.iloc[time_step][self.ret_colname], test_data.iloc[time_step][self.close_colname]] )
@@ -128,7 +128,7 @@ class BaseSim:
         Do not Return"""
         pass
     
-    def test_step(self, train_data:pd.DataFrame, test_data: pd.DataFrame):
+    def test_step(self, train_data:pd.DataFrame, last_month: pd.DataFrame, test_data: pd.DataFrame, cur_time_step: int):
         """Modify this test step to change P or perform other operations if necessary before computing return for that time period
         
         Do Not Return"""
