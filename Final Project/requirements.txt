@@ -4,3 +4,4 @@ numpy
 tqdm
 alpaca_trade_api
 matplotlib
+plotly

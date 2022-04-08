@@ -171,7 +171,6 @@ if __name__ == '__main__':
     runs = 100 # for testing
     # send out ray multiprocess remote operation (Should not need to change this part)
     sims = []
-    metrics = []
     ticker_order = []
     for ticker, ohlc in tqdm(data.items(), desc = 'Ticker'):
         
@@ -181,21 +180,19 @@ if __name__ == '__main__':
         
         # send remote actor
         threshold = ThresholdingSim.remote()
-        sim_data = threshold.run_simulation.remote(runs = runs, data = ohlc, ret_colname = 'log_returns', split = [.5, .5], pred_period = 140, drop_last_incomplete_period = True) # 140 for a month
+        sim_data = threshold.run_simulation.remote(runs = runs, data = ohlc, ret_colname = 'log_returns', split = [.75, .25], pred_period = 140, drop_last_incomplete_period = True) # 140 for a month
         metric_data = threshold.compute_metrics.remote(sim_data)
         
 
         # save the data in results
         threshold.save_sim.remote(sim_data, os.path.join(ticker_path, 'simulation.npy'))
-        threshold.save_metrics.remote(metric_data, os.path.join(ticker_path, 'metrics.npz'))
         
         ticker_order.append(ticker)
         sims.append(sim_data)
-        metrics.append(metric_data) 
     
     # get data once it is ready 
     sims = ray.get(sims)
-    metrics = ray.get(metrics)
+
     
     #print(sims[0])
     ray.shutdown()

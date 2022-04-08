@@ -38,9 +38,7 @@ Steps:
 
     4. Other Models
         1. Thresholding
-        2. Pairing
-        3. P(Dt, Ht)
-        4. Combination etc.
+        2. P(Dt, Ht)
     
     5. "Train"
         - Compute initial Probability (whether it is constant or not)
@@ -52,12 +50,7 @@ Steps:
         - Add new model to Training set
 
     7. Statistics
-        - Strategy based computations  ( Computed over each test period AND can aggregate a mean/median P/L. For over all, compute a mean/median/max/min P/L)
-            - P/L
-            - Sharpe
-        - Computed on predicted model (These hold constant regardless of strategy) (Compute B and Corr on each run and then compute quantiles over all runs) (Computed over each test period)
-            - Correlation
-            - SMAPE
+        - Strategy - Get a distribution of results at the end of each month, create a Page rank of each stock, create a portfolio
 
         - Plots
             Like Paper
@@ -66,25 +59,17 @@ Steps:
                 - testn -> real and our predictions
                 - Can split with red line.
 
-            Quantile of simulations
-                - Computed by quantiles of P/L
-                - Max & min & median 
+            Quantile of simulations (sample in validate_sim.ipynb)
+                - Max & min & median & Q1 & Q3
+                - Plot w.r.t real for simulations
             
-            Box plot/Histogram 
-                - For Strategy based
-                    - Straightforward
-                - For Corr/Smape
-                    - Boxplot/bargraph mix
 
-    8. Plausible Strategy
-        - Profit target = X% of max value in sim
-        - Stop target = Min value in sim - (some percent/value)
+            Portfolio plots.
+                - PNL over time
+                - Sharp over time
+            
+            Others?
+            
 
 
     tkomeiji20
-
-
-
-    For PnL, Avg expectations of all runs? then compute PnL, etc.
-    Sharpe Changes
-    Compute Corr and Smape on the median, min max runs etc.

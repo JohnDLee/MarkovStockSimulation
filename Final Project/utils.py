@@ -136,8 +136,28 @@ class BaseSim:
     
 
     #########################
-    # Statistic functions
+    # Save Functions
     #########################
+    
+    def save_sim(self, run_data, filepath):
+        """ Saves Run data as an npy binary file"""
+        np.save(filepath, run_data, fix_imports=False)
+        return
+    
+    
+    
+    ##########################
+    # Deprecated - Do Not Use
+    ########################## 
+    
+    def save_metrics(self, metrics:dict, filepath):
+        """ Saves metrics in a npz zip file"""
+        np.savez(filepath, **metrics)
+        return
+    
+    ##########################
+    # Statistic functions
+    ##########################
     def get_strategies(self):
         print('Valid Strategies:')
         for strat in self.strategies:
@@ -160,9 +180,6 @@ class BaseSim:
         smape = self.SMAPE(run_data)
         
         return {'PnL': pnl, 'Sharpe': sharpe, 'Correlation': corr, 'SMAPE': smape}
-        
-        
-        
     def PnL(self, run_data: np.array, strategy = 'B&H', log = True):
         """Compute P/L on run_data with strategy.
         
@@ -217,7 +234,7 @@ class BaseSim:
             sharpe.append(sharpe_sim)
             
         return np.array(sharpe)
-    
+
     def corr(self, run_data: np.array):
         """ Computes correlation of predicted model returns to true data returns
             Return a 2-d array of where:
@@ -249,18 +266,11 @@ class BaseSim:
             smapes.append(smape_sim)
         return np.array(smapes)
     
-
-    #########################
-    # Save Functions
-    #########################
     
-    def save_sim(self, run_data, filepath):
-        """ Saves Run data as an npy binary file"""
-        np.save(filepath, run_data, fix_imports=False)
-        return
     
-    def save_metrics(self, metrics:dict, filepath):
-        """ Saves metrics in a npz zip file"""
-        np.savez(filepath, **metrics)
-        return
-        
+class BasePortfolioSim():
+    
+    ''' Computes a simulation for a portfolio w/ the Page Rank algorithm. '''
+    def __init__(self):
+        pass
+    

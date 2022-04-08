@@ -165,7 +165,7 @@ if __name__ == '__main__':
     ray.init(include_dashboard = False)
     
     # set up dirs in results we will use (this will be changed)
-    results_dir = 'results/Control'
+    results_dir = 'results/P'
     os.system(f'rm -rf {results_dir}')
     os.mkdir(results_dir)
     
@@ -181,7 +181,6 @@ if __name__ == '__main__':
     runs = 100 # for testing
     # send out ray multiprocess remote operation (Should not need to change this part)
     sims = []
-    metrics = []
     ticker_order = []
     for ticker, ohlc in tqdm(data.items(), desc = 'Ticker'):
         
@@ -191,17 +190,14 @@ if __name__ == '__main__':
         
         # send remote actor
         control = ControlSim.remote()
-        sim_data = control.run_simulation.remote(runs = runs, data = ohlc, ret_colname = 'log_returns', split = [.5, .5], pred_period = 140, drop_last_incomplete_period = True) # 140 for a month
-        metric_data = control.compute_metrics.remote(sim_data)
+        sim_data = control.run_simulation.remote(runs = runs, data = ohlc, ret_colname = 'log_returns', split = [.75, .25], pred_period = 140, drop_last_incomplete_period = True) # 140 for a month
         
 
         # save the data in results
         control.save_sim.remote(sim_data, os.path.join(ticker_path, 'simulation.npy'))
-        control.save_metrics.remote(metric_data, os.path.join(ticker_path, 'metrics.npz'))
         
         ticker_order.append(ticker)
         sims.append(sim_data)
-        metrics.append(metric_data)
     
     # get data once it is ready 
     sims = ray.get(sims)
