@@ -162,7 +162,7 @@ if __name__ == '__main__':
         data[ticker] = pd.read_csv(filepath_or_buffer=os.path.join('data/clean_data/', file), header=0, index_col = 0, parse_dates=True, infer_datetime_format=True) # read data correctly
     
 
-    runs = 100 # for testing
+    runs = 10 # for testing
     # send out ray multiprocess remote operation (Should not need to change this part)
     sims = []
     ticker_order = []

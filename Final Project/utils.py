@@ -35,7 +35,7 @@ class BaseSim:
         
         
         Returns:
-            Simulation data as a numpy, where each time period is [predicted, true].
+            Simulation data as a numpy, where each time period is [predicted_ret, true_ret, true_close].
             If drop_last_incomplete_period is true simulation data does not include the last time period if the data does not complete an entire prediction period'''
         
         self.ret_colname = ret_colname
@@ -271,6 +271,129 @@ class BaseSim:
 class BasePortfolioSim():
     
     ''' Computes a simulation for a portfolio w/ the Page Rank algorithm. '''
-    def __init__(self):
+    def __init__(self,):
         pass
     
+    def softmax(self, x):
+        y = np.exp(x - np.max(x))
+        f_x = y / np.sum(np.exp(x))
+        return f_x
+    
+    def sim(self, ticker_sim1_data: dict):
+        ''' allticker_sim1_data should be in form:
+                Outer Layer = Tickers (0-num_tickers)
+                Layer 2 = 0 - runs # of simulations
+                Layer 3 = 0 - # of test periods
+                Layer 4 = 0 - # of time periods per test period
+                Layer 5 = [predicted_ret, true_ret, true_close]
+                
+        '''
+        # simulation results
+        pageranks = {} # page ranks at each month for each stock
+        true_returns = {} # true returns for each month for each stock
+        tickers = list(ticker_sim1_data.keys())
+        simdata = {}
+        # First, swap the axis around to preserve data
+        for ticker in tickers:
+            simdata[ticker] = np.swapaxes(ticker_sim1_data[ticker], 0, 1)  
+            simdata[ticker] = np.swapaxes(simdata[ticker], 1, 2)  
+
+        # first compute mean, std, and correlation of each period
+        # GOOGLE MATRIX will look like ???
+            #G = p1(MEAN) + p2(STD) + p3(CORR) + (1 - p1 - p2 - p3)(B)
+        for period in range(len(simdata[ticker[0]])):
+            
+            # compute mean scores for each stock
+            mean_row = []
+            for ticker in tickers:
+                print(ticker)
+                mean_row.append(np.mean(np.sum(simdata[ticker][period,:,:, 0], axis = 0)))
+            print(mean_row)
+            mean_row = self.softmax(np.array(mean_row))
+            print(mean_row)
+            means = []
+            for ticker in tickers:
+                means.append(mean_row)
+            means = np.array(means)
+            
+            # compute std
+            std_row = []
+            for ticker in tickers:
+                print(ticker)
+                std_row.append(np.std(np.sum(simdata[ticker][period,:,:, 0], axis = 0)))
+            print(std_row)
+            std_row = self.softmax(np.array(std_row))
+            print(std_row)
+            stds = []
+            for ticker in tickers:
+                stds.append(std_row)
+            stds = np.array(stds)
+            
+            # no corrs first
+            B = np.array([[1/len(tickers) for x in range(len(tickers))] for i in range(len(tickers))])
+            
+            G = .4 * means + .4 * stds + .2 * B
+            
+            G = np.transpose(G) 
+            G = G - np.identity(len(tickers))
+            G[-1,:] = 1
+            
+            solutions = [0 for x in range(len(tickers))]
+            solutions[-1] = 1
+            print("-----------------")
+            print(np.linalg.solve(G, solutions))
+            
+            
+            
+        print(means)
+        print(stds)
+        print(B)
+        print(G)
+        print(solutions)
+        print(np.linalg.solve(G, solutions))
+            
+            
+                
+            
+            
+        
+    
+        
+        
+# testing
+if __name__ == '__main__':
+    import os
+    
+    data = ['AAPL', 'GS', 'JPM', 'NVDA', 'TSLA', 'V']
+    root = 'results/Control'
+    
+    # load simdata
+    simdata = {}
+    for ticker in data:
+        simdata[ticker] = np.load(os.path.join(root, f'{ticker}/simulation.npy'))
+    
+    print(simdata['GS'].shape)
+
+    print(    np.swapaxes(simdata['AAPL'], 0, 1 ).shape)
+    test= BasePortfolioSim()
+    
+    print("''''''-----------------")
+    print( simdata['TSLA'][0][:,-1,1])
+    print("=========================")
+    t = np.swapaxes(simdata['TSLA'], 0, 1 )
+    print( t[:,0,-1,1])
+    
+    
+    print("''''''-----------------")
+    print(simdata['TSLA'][:,0,-1,0])
+    print("=========================")
+    print( t[0,:,-1,0])
+    
+    
+    print("-===================")
+    t2 = np.swapaxes(t, 1, 2)
+    print(np.sum(t2[0,:,:, 0], axis = 0))
+    test.sim(simdata)
+        
+            
+        
