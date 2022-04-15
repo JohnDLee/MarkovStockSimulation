@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from tqdm import tqdm, trange
+import os
 
 class BaseSim:
     
@@ -344,20 +345,30 @@ class BasePortfolioSim():
             
 
         return pageranks, true_log_returns
-       
+    
+    
+    def save_sim(path, pageranks, true_log_returns):
+        np.save(os.join(path, 'pageranks.npy'), pageranks, fix_imports=False)
+        np.save(os.join(path, 'true_log_returns.npy'), true_log_returns, fix_imports=False)
+        return
 
 
 def get_tickers():
     ''' list of used tickers '''
     return ['AAPL', 'CVX', 'DVN', 'GS', 'JNJ', 'JPM', 'MRK', 'NVDA', 'PFE', 'TSLA', 'V', 'XOM']
 
-def load_sim_data(path, tickers):
+def load_sim1_data(path, tickers):
     """ Loads sim data beginning at path. Path should contain individual directories named after each stock"""
     # load simdata
     simdata = {}
     for ticker in tickers:
         simdata[ticker] = np.load(os.path.join(path, f'{ticker}/simulation.npy'))
     return simdata
+
+def load_sim2_data(path, tickers):
+    pageranks = np.load(os.join(path, 'pageranks.npy'))
+    true_log_returns = np.load(os.join(path, 'true_log_returns.npy'))
+    return pageranks, true_log_returns
 
 def load_true_data(root_dir):
     """Pass the root directory"""
@@ -430,12 +441,6 @@ def Sharpe( pnl: np.array, rfrate = 0):
     for ret_index in range(1, len(pnl)):
         sharpe.append((pnl[:ret_index + 1].mean() - rfrate) / np.std(pnl[:ret_index+1]))
     return np.array(sharpe)   
-    
-    
-    
-    
-            
-        
 
         
         
