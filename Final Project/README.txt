@@ -73,3 +73,7 @@ Steps:
 
 
     tkomeiji20
+
+Future work
+
+Page rank could use different computations, such as correlation

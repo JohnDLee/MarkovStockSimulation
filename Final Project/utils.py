@@ -273,11 +273,7 @@ class BasePortfolioSim():
     ''' Computes a simulation for a portfolio w/ the Page Rank algorithm. '''
     def __init__(self,):
         pass
-    
-    def softmax(self, x):
-        y = np.exp(x - np.max(x))
-        f_x = y / np.sum(np.exp(x))
-        return f_x
+
     
     def sim(self, ticker_sim1_data: dict):
         ''' allticker_sim1_data should be in form:
@@ -288,112 +284,176 @@ class BasePortfolioSim():
                 Layer 5 = [predicted_ret, true_ret, true_close]
                 
         '''
-        # simulation results
-        pageranks = {} # page ranks at each month for each stock
-        true_returns = {} # true returns for each month for each stock
+        
         tickers = list(ticker_sim1_data.keys())
+        
+        # simulation results
+        pageranks = dict(zip(tickers, [[] for x in range(len(tickers))])) # page ranks at each month for each stock
+        true_log_returns = dict(zip(tickers, [[] for x in range(len(tickers))])) # true returns for each month for each stock
+        
+        
+        
         simdata = {}
         # First, swap the axis around to preserve data
         for ticker in tickers:
             simdata[ticker] = np.swapaxes(ticker_sim1_data[ticker], 0, 1)  
             simdata[ticker] = np.swapaxes(simdata[ticker], 1, 2)  
 
-        # first compute mean, std, and correlation of each period
-        # GOOGLE MATRIX will look like ???
-            #G = p1(MEAN) + p2(STD) + p3(CORR) + (1 - p1 - p2 - p3)(B)
-        for period in range(len(simdata[ticker[0]])):
+        # for each period
+        for period in range(len(simdata[tickers[0]])):
             
-            # compute mean scores for each stock
-            mean_row = []
-            for ticker in tickers:
-                print(ticker)
-                mean_row.append(np.mean(np.sum(simdata[ticker][period,:,:, 0], axis = 0)))
-            print(mean_row)
-            mean_row = self.softmax(np.array(mean_row))
-            print(mean_row)
+            # compute the positive PDF for each stock.
             means = []
             for ticker in tickers:
+                simulation_ret = np.exp(np.sum(simdata[ticker][period,:,:, 0], axis = 0))
+                mean_row = []
+                for ticker2 in tickers:
+                    
+                    # if they are the same, give it a 0 weight
+                    if ticker2 == ticker:
+                        mean_row.append(0)
+                        continue
+                    
+                    # otherwise compute density of area under curve above 0
+                    sim2_ret_mean = np.exp(np.sum(simdata[ticker2][period,:,:, 0], axis = 0))
+                    data = simulation_ret - sim2_ret_mean
+                    weight, bins = np.histogram(data, bins = np.linspace(data.min(), data.max(), 100), density = True)
+                    mean_row.append(weight[bins[:-1] > 0].sum())
+                mean_row = np.array(mean_row)
+                # normalize to a probability
+                mean_row /= mean_row.sum()
                 means.append(mean_row)
+                true_log_returns[ticker].append(np.sum(simdata[ticker][period,:,0, 1], axis = 0))
             means = np.array(means)
             
-            # compute std
-            std_row = []
-            for ticker in tickers:
-                print(ticker)
-                std_row.append(np.std(np.sum(simdata[ticker][period,:,:, 0], axis = 0)))
-            print(std_row)
-            std_row = self.softmax(np.array(std_row))
-            print(std_row)
-            stds = []
-            for ticker in tickers:
-                stds.append(std_row)
-            stds = np.array(stds)
-            
-            # no corrs first
+            # base array
             B = np.array([[1/len(tickers) for x in range(len(tickers))] for i in range(len(tickers))])
-            
-            G = .4 * means + .4 * stds + .2 * B
-            
+                
+            # solve for limiting distribution
+            G = .75 * means + .25 * B
             G = np.transpose(G) 
             G = G - np.identity(len(tickers))
             G[-1,:] = 1
-            
             solutions = [0 for x in range(len(tickers))]
             solutions[-1] = 1
-            print("-----------------")
-            print(np.linalg.solve(G, solutions))
             
+            pr = np.linalg.solve(G, solutions)
+            # append it to page_ranks in correct order
+            for ticker_id in range(len(tickers)):
+                pageranks[tickers[ticker_id]].append(pr[ticker_id])
             
-            
-        print(means)
-        print(stds)
-        print(B)
-        print(G)
-        print(solutions)
-        print(np.linalg.solve(G, solutions))
-            
-            
+
+        return pageranks, true_log_returns
+       
+
+
+def get_tickers():
+    ''' list of used tickers '''
+    return ['AAPL', 'CVX', 'DVN', 'GS', 'JNJ', 'JPM', 'MRK', 'NVDA', 'PFE', 'TSLA', 'V', 'XOM']
+
+def load_sim_data(path, tickers):
+    """ Loads sim data beginning at path. Path should contain individual directories named after each stock"""
+    # load simdata
+    simdata = {}
+    for ticker in tickers:
+        simdata[ticker] = np.load(os.path.join(path, f'{ticker}/simulation.npy'))
+    return simdata
+
+def load_true_data(root_dir):
+    """Pass the root directory"""
+    # load data
+    data = {}
+    for file in os.listdir('data/clean_data'):
+        print(file)
+        ticker = file.split('.')[0] # retrieve ticker_name
+        data[ticker] = pd.read_csv(filepath_or_buffer=os.path.join('data/clean_data/', file), header=0, index_col = 0, parse_dates=True, infer_datetime_format=True) # read data correctly
+    return data
+
+
                 
-            
-            
+def PnL(portfolio_page_rank, portfolio_true_ret, choose: int):
+    ''' Takes results from simulation and outputs PnL,
+    Chooses "choose" number of stocks to purchase at each time period
+    Changes from log returns to normal returns.
+    
+    returns:
+        list of proportions of each stock purchased
+        list of each stock purchased
+        list of pnl's 
+        final pnl after all time.'''
+    
+    proportion_purchased = []
+    tickers_purchased = []
+    pnl = []
+    tickers = list(portfolio_page_rank.keys())
+    for period in range(len(portfolio_page_rank[tickers[0]])):
+        period_page_rank = {}
+        for ticker, pr in portfolio_page_rank.items():
+            period_page_rank[pr[period]] = ticker
+        
+        top_scores = sorted(list(period_page_rank.keys()))[-choose:]
+        top_scores = np.array(top_scores)
+        top_scores_tickers = [period_page_rank[i] for i in top_scores]
+        top_scores = top_scores / top_scores.sum()
+        proportion_purchased.append(top_scores)
+        tickers_purchased.append(top_scores_tickers)
+        
+        cur_pnl = np.array([top_scores[x] * np.exp(portfolio_true_ret[top_scores_tickers[x]][period]) for x in range(len(top_scores))]).sum()
+        pnl.append(cur_pnl)
+        
+    ret = 1
+    for cur_pnl in pnl:
+        ret *= cur_pnl
+    
+    return proportion_purchased, tickers_purchased, pnl, ret
         
     
+def max_drawdown(pnl):
+    ''' takes pnl from PnL'''
+    pnl = np.array(pnl)
+    pnl -= 1 # to be returns
+    return pnl.min()
+    
+            
+        
+def Sharpe( pnl: np.array, rfrate = 0):
+    """ Computes sharpe over time with unlogged data computed from PnL,
+        Return a 2-d array of where:
+            Outer Layer = 0 - runs # of simulations
+            Layer 2 = 0 - # of test periods Sharpe calculations
+            the first pnl will be NaN
+        
+    """
+    sharpe = [np.nan]
+    pnl = np.array(pnl)
+    pnl -= 1
+    for ret_index in range(1, len(pnl)):
+        sharpe.append((pnl[:ret_index + 1].mean() - rfrate) / np.std(pnl[:ret_index+1]))
+    return np.array(sharpe)   
+    
+    
+    
+    
+            
+        
+
         
         
 # testing
 if __name__ == '__main__':
     import os
     
-    data = ['AAPL', 'GS', 'JPM', 'NVDA', 'TSLA', 'V']
+    tickers = get_tickers()
     root = 'results/Control'
     
     # load simdata
-    simdata = {}
-    for ticker in data:
-        simdata[ticker] = np.load(os.path.join(root, f'{ticker}/simulation.npy'))
+    simdata = load_sim_data(root, tickers)
     
-    print(simdata['GS'].shape)
-
-    print(    np.swapaxes(simdata['AAPL'], 0, 1 ).shape)
     test= BasePortfolioSim()
-    
-    print("''''''-----------------")
-    print( simdata['TSLA'][0][:,-1,1])
-    print("=========================")
-    t = np.swapaxes(simdata['TSLA'], 0, 1 )
-    print( t[:,0,-1,1])
-    
-    
-    print("''''''-----------------")
-    print(simdata['TSLA'][:,0,-1,0])
-    print("=========================")
-    print( t[0,:,-1,0])
-    
-    
-    print("-===================")
-    t2 = np.swapaxes(t, 1, 2)
-    print(np.sum(t2[0,:,:, 0], axis = 0))
-    test.sim(simdata)
+    pageranks, true_log_returns = test.sim(simdata)
         
             
-        
+    prop, tic, pnl, ret = PnL(pageranks, true_log_returns, choose = len(tickers))
+    print(ret)
+    print(Sharpe(pnl, rfrate=0))
+    print(max_drawdown(pnl))
