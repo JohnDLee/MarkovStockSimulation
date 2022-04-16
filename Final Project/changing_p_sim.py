@@ -20,13 +20,6 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
         
         # Call the Base Sim's init method to init self.P, self.M, self.STD, self.states, self.strategies, and self.ret_colname
         super().__init__(states = states)
-        days = ['Mo', 'Tu', 'We', 'Th', 'F']
-        hours = [9, 10, 11, 12, 13, 14, 15]
-        self.allP = pd.DataFrame()
-        for day in days:
-            self.allP[day] = pd.DataFrame()
-            for hour in hours:
-                self.allP[day][hour] = self.P.copy()
         # Any other attributes needed
         # None for this case
         
@@ -56,6 +49,8 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
         # Use Base Sim reset method to set all means and P and std to 0
         self.reset() 
         
+        # Make Base P
+        self.allP = {day:{hour:self.P.copy() for hour in range(9,16)} for day in range(7)}
         # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
         rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
         
@@ -66,9 +61,9 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             cur_state = self.det_state(cur_ret) # helper method defined below
             next_state = self.det_state(next_ret)
             
-            time_string = train_data.iloc[rowid]['timestamp'].split()
-            day = datetime.datetime.strptime(time_string, '%Y-%m-%d')
-            time = int(time_string[1][:2])
+            time_string = train_data.iloc[rowid].name
+            day = time_string.day_of_week
+            time = time_string.hour
             # just use self.P to keep track of counts first
             self.allP[day][time][cur_state][next_state] += 1
             # std/M is more involved
@@ -116,8 +111,12 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             cur_state = self.det_state(cur_ret) # helper method defined below
             next_state = self.det_state(next_ret)
             
-            # use P to keep track of counts first
-            P[cur_state][next_state] += 1
+            time_string = last_month.iloc[rowid].name
+            day = time_string.day_of_week
+            time = time_string.hour
+            # just use self.allP to keep track of counts first
+            self.allP[day][time][cur_state][next_state] += 1
+
             # std/M is more involved
             rets[cur_state].append(cur_ret)
         
@@ -149,9 +148,15 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
         # return nothing
         return
     
-    def test_step(self, train_data: pd.DataFrame,  test_data: pd.DataFrame):
+    def test_step(self, train_data:pd.DataFrame, last_month: pd.DataFrame, test_data: pd.DataFrame, cur_time_step: int):
         # Nothing needs to be done in the test step for the control case, but you can adjust self.P and self.M and self.V
-        
+        time_string = test_data.iloc[cur_time_step].name
+        day = time_string.day_of_week
+        time = time_string.hour
+        # time_string = test_data.iloc[cur_time_step]['timestamp'].split()
+        # day = datetime.datetime.strptime(time_string, '%Y-%m-%d')
+        # time = int(time_string[1][:2])
+        self.P = self.allP[day][time]
         return
         
     # can write extra functions like this to be used in train
