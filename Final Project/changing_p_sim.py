@@ -1,16 +1,15 @@
-from utils import BaseSim
+from utils import *
 import pandas as pd
 import numpy as np
 import os
 from tqdm import tqdm
-import datetime
 
 # faster processing with ray
 import ray
 
 # Sample Code on Control
 @ray.remote
-class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Base Sim's methods)
+class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of Base Sim's methods)
     
     def __init__(self):
         
@@ -169,45 +168,47 @@ if __name__ == '__main__':
     
     ray.init(include_dashboard = False)
     
+    
     # set up dirs in results we will use (this will be changed)
-    results_dir = 'results/P'
-    os.system(f'rm -rf {results_dir}')
-    os.mkdir(results_dir)
+    config = Config('.', 'changing_p', test_mode = False)
     
     
     # load data
-    data = {}
-    for file in os.listdir('data/clean_data'):
-        print(file)
-        ticker = file.split('.')[0] # retrieve ticker_name
-        data[ticker] = pd.read_csv(filepath_or_buffer=os.path.join('data/clean_data/', file), header=0, index_col = 0, parse_dates=True, infer_datetime_format=True) # read data correctly
+    data = config.load_true_data()
     
-
-    runs = 100 # for testing
     # send out ray multiprocess remote operation (Should not need to change this part)
     sims = []
     ticker_order = []
     for ticker, ohlc in tqdm(data.items(), desc = 'Ticker'):
         
-        # create dir
-        ticker_path = os.path.join(results_dir, ticker)
-        os.mkdir(ticker_path)
-        
         # send remote actor
-        control = ControlSim.remote()
-        sim_data = control.run_simulation.remote(runs = runs, data = ohlc, ret_colname = 'log_returns', split = [.75, .25], pred_period = 140, drop_last_incomplete_period = True) # 140 for a month
-        
-
-        # save the data in results
-        control.save_sim.remote(sim_data, os.path.join(ticker_path, 'simulation.npy'))
-        
+        cp = Changing_PSim.remote()
+        sim_data = cp.run_simulation.remote(runs = config.num_tests, data = ohlc, ret_colname = 'log_returns', split = config.split, pred_period = config.pred_period, drop_last_incomplete_period = True)
+    
         ticker_order.append(ticker)
         sims.append(sim_data)
-    
+
     # get data once it is ready 
     sims = ray.get(sims)
-    metrics = ray.get(metrics)
+    all_sims = {}
+    for ticker in range(len(ticker_order)):
+        all_sims[ticker_order[ticker]] = sims[ticker] 
     
-    #print(sims[0])
+    # save simulation 1
+    config.save_sim1(all_sims)
     ray.shutdown()
+
+    # Run simulation 2
+    ps = PortfolioSim()
+    page_rank, true_log_returns = ps.sim(all_sims, config.page_rank_effect)
     
+    # save simulation 2
+    config.save_sim2(page_rank, true_log_returns)
+    
+    # compute quantiles and metrics for buying all stocks
+    met = Metrics(all_sims, page_rank, true_log_returns, top_n = len(config.get_tickers()))
+    quantiles = met.get_quantiles()
+    config.save_quantiles(quantiles)
+    
+    metrics = met.all_metrics()
+    config.save_metrics(metrics, top_n = len(config.get_tickers()))    
