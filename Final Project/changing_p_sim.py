@@ -86,7 +86,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
                     # compute self.M/self.STD
                     self.M[state] = ret.mean()
                     self.STD[state] = ret.std()
-                
+
         # return nothing
         return
     
@@ -120,6 +120,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
 
             # std/M is more involved
             rets[cur_state].append(cur_ret)
+            
         
         # compute P, STD, M
         for day in range(5):
@@ -147,7 +148,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
                 
             self.M[state] = (self.M[state] + M[state])/2
             self.STD[state] = (self.STD[state] + STD[state])/2
-            
+
         # return nothing
         return
     
@@ -159,7 +160,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
         # time_string = test_data.iloc[cur_time_step]['timestamp'].split()
         # day = datetime.datetime.strptime(time_string, '%Y-%m-%d')
         # time = int(time_string[1][:2])
-        print(f'Changing to {day} {time}')
+        # print(f'Changing to {day} {time}')
         self.P = self.allP[day][time]
         return
         
