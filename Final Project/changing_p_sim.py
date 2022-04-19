@@ -49,7 +49,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
         self.reset() 
         
         # Make Base P
-        self.allP = {day:{hour:self.P.copy() for hour in range(9,16)} for day in range(7)}
+        self.allP = {day:{hour:self.P.copy() for hour in range(9,16)} for day in range(5)}
         # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
         rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
         
@@ -69,22 +69,24 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
             rets[cur_state].append(cur_ret)
         
         # compute self.P, self.STD and self.M
-        for state in self.states:
-            
-            # compute the totals for each row
-            state_total = 0
-            for next_state in self.states:
-                state_total += self.P[state][next_state]
+        for day in range(5):
+            for hour in range(9, 16):
+                for state in self.states:
+                    
+                    # compute the totals for each row
+                    state_total = 0
+                    for next_state in self.states:
+                        state_total += self.allP[day][hour][state][next_state]
+                        
+                    # compute the Probs
+                    for next_state in self.states: 
+                        self.allP[day][hour][state][next_state] = self.allP[day][hour][state][next_state]/state_total
+                        
+                    ret = np.array(rets[state])
+                    # compute self.M/self.STD
+                    self.M[state] = ret.mean()
+                    self.STD[state] = ret.std()
                 
-            # compute the Probs
-            for next_state in self.states:
-                self.P[state][next_state] = self.P[state][next_state]/state_total
-                
-            ret = np.array(rets[state])
-            # compute self.M/self.STD
-            self.M[state] = ret.mean()
-            self.STD[state] = ret.std()
-        
         # return nothing
         return
     
@@ -120,21 +122,23 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
             rets[cur_state].append(cur_ret)
         
         # compute P, STD, M
-        for state in self.states:
-            
-            # compute the totals for each row
-            state_total = 0
-            for next_state in self.states:
-                state_total += self.P[state][next_state]
-                
-            # compute the Probs
-            for next_state in self.states:
-                self.P[state][next_state] = self.P[state][next_state]/state_total
-                
-            ret = np.array(rets[state])
-            # compute self.M/self.STD
-            M[state] = ret.mean()
-            STD[state] = ret.std()
+        for day in range(5):
+            for hour in range(9, 16):
+                for state in self.states:
+                    
+                    # compute the totals for each row
+                    state_total = 0
+                    for next_state in self.states:
+                        state_total += self.allP[day][hour][state][next_state]
+                        
+                    # compute the Probs
+                    for next_state in self.states:
+                        self.allP[day][hour][state][next_state] = self.allP[day][hour][state][next_state]/state_total
+                        
+                    ret = np.array(rets[state])
+                    # compute self.M/self.STD
+                    M[state] = ret.mean()
+                    STD[state] = ret.std()
         
         # Now recompute self.P, self.STD, self.M
         for state in self.states:
@@ -155,6 +159,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
         # time_string = test_data.iloc[cur_time_step]['timestamp'].split()
         # day = datetime.datetime.strptime(time_string, '%Y-%m-%d')
         # time = int(time_string[1][:2])
+        print(f'Changing to {day} {time}')
         self.P = self.allP[day][time]
         return
         
