@@ -84,7 +84,7 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
             # compute self.M/self.STD
             self.M[state] = ret.mean()
             self.STD[state] = ret.std()
-
+        # print(self.P)
         return
     
     
@@ -127,12 +127,17 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
 
         # Now recompute self.P, self.STD, self.M
         for state in self.states:
+            rowSum = int(sum(P[state].values()))
+            # print(rowSum, self.P[state])
+            # print(rowSum, [P[state][s] / rowSum for s in P[state]])
             for next_state in self.states:
-                self.P[state][next_state] = (self.P[state][next_state] + P[state][next_state])/2
+                # print(self.P[state][next_state])
+                self.P[state][next_state] = (self.P[state][next_state] / rowSum + (P[state][next_state] / rowSum))/2
                 
             self.M[state] = (self.M[state] + M[state])/2
             self.STD[state] = (self.STD[state] + STD[state])/2
-        
+            # print(f'{state}: {self.M[state]} {self.STD[state]}')
+        # print(self.P)
         return
     
         
@@ -143,11 +148,13 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
         
         # Remove the greater than
         # states.pop()
-
+        # print(ret)
         # Determine current state
         for state in states:
             if ret < state:
+                # print(f'{"Bear " if ret < 0 else "Bull "}{state:.3f}')
                 return f'{"Bear " if ret < 0 else "Bull "}{state:.3f}'
+        # print('Bull >0.005')
         return 'Bull >0.005'
         
 if __name__ == '__main__':
