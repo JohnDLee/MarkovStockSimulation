@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from tqdm import tqdm
+from copy import deepcopy
 
 # faster processing with ray
 import ray
@@ -80,6 +81,7 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             self.M[state] = ret.mean()
             self.STD[state] = ret.std()
         
+        
         # return nothing
         return
     
@@ -93,9 +95,13 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
         
         # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
         # Create a copy of each state !!!!!!!!!!!!!!
-        P = self.P.copy()
-        M = self.M.copy()
-        STD = self.STD.copy()
+        P = deepcopy(self.P)
+        # reset P
+        for state in P:
+            for state2 in P[state]:
+                P[state][state2] = 0
+        M = deepcopy(self.M)
+        STD = deepcopy(self.STD)
         rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
         
         for rowid in range(len(last_month) - 1):
@@ -116,17 +122,16 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             # compute the totals for each row
             state_total = 0
             for next_state in self.states:
-                state_total += self.P[state][next_state]
+                state_total += P[state][next_state]
                 
             # compute the Probs
             for next_state in self.states:
-                self.P[state][next_state] = self.P[state][next_state]/state_total
+                P[state][next_state] = P[state][next_state]/state_total
                 
             ret = np.array(rets[state])
             # compute self.M/self.STD
             M[state] = ret.mean()
             STD[state] = ret.std()
-        
         # Now recompute self.P, self.STD, self.M
         for state in self.states:
             for next_state in self.states:
@@ -134,7 +139,6 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
                 
             self.M[state] = (self.M[state] + M[state])/2
             self.STD[state] = (self.STD[state] + STD[state])/2
-            
         # return nothing
         return
     
@@ -159,7 +163,6 @@ if __name__ == '__main__':
     sims = []
     ticker_order = []
     for ticker, ohlc in tqdm(data.items(), desc = 'Ticker'):
-        
         # send remote actor
         control = ControlSim.remote()
         sim_data = control.run_simulation.remote(runs = config.num_tests, data = ohlc, ret_colname = 'log_returns', split = config.split, pred_period = config.pred_period, drop_last_incomplete_period = True)

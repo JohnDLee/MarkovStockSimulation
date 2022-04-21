@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 from tqdm import tqdm
+from copy import deepcopy
 
 # faster processing with ray
 import ray
@@ -94,9 +95,13 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
         You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
         
         Do not Return"""
-        P = self.new_prob()
-        M = self.M.copy()
-        STD = self.STD.copy()
+        P = deepcopy(self.P)
+        # reset P
+        for state in P:
+            for state2 in P[state]:
+                P[state][state2] = 0
+        M = deepcopy(self.M)
+        STD = deepcopy(self.STD)
         rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
 
         # Compute probability matrix based on last month
