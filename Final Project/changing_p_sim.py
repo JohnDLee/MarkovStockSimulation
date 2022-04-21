@@ -65,6 +65,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
             cur_state = self.det_state(cur_ret) # helper method defined below
             next_state = self.det_state(next_ret)
             
+            # Get time and day from data
             time_string = train_data.iloc[rowid].name
             day = time_string.day_of_week
             time = time_string.hour
@@ -106,10 +107,12 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
         # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
         # Create a copy of each state !!!!!!!!!!!!!!
         
+        # Make deep clones of the all statistics
         allP = {day:{hour:self.new_prob() for hour in range(9,16)} for day in range(5)}
         
         allM = deepcopy(self.allM)
         allSTD = deepcopy(self.allSTD)
+        # Modify returns to hold returns based on day, hour combinations
         rets = {day:{hour:dict(zip(self.states, [[] for i in range(len(self.states))])) for hour in range(9,16)} for day in range(5)}
         
         for rowid in range(len(last_month) - 1):
