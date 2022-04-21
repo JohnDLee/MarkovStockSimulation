@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from tqdm import tqdm
+from copy import deepcopy
 
 # faster processing with ray
 import ray
@@ -49,10 +50,14 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
         self.reset() 
         
         # Make Base P
-        self.allP = {day:{hour:self.P.copy() for hour in range(9,16)} for day in range(5)}
+        self.allP = {day:{hour:self.new_prob() for hour in range(9,16)} for day in range(5)}
         # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
-        rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
+        rets = {day:{hour:dict(zip(self.states, [[] for i in range(len(self.states))])) for hour in range(9,16)} for day in range(5)}
         
+        # Hold STD and M in allSTD and allM
+        self.allSTD = {day:{hour:{} for hour in range(9,16)} for day in range(5)}
+        self.allM = {day:{hour:{} for hour in range(9,16)} for day in range(5)}
+
         for rowid in range(len(train_data) - 1):
             cur_ret = train_data.iloc[rowid][self.ret_colname]
             next_ret = train_data.iloc[rowid + 1][self.ret_colname]
@@ -66,7 +71,7 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
             # just use self.P to keep track of counts first
             self.allP[day][time][cur_state][next_state] += 1
             # std/M is more involved
-            rets[cur_state].append(cur_ret)
+            rets[day][time][cur_state].append(cur_ret)
         
         # compute self.P, self.STD and self.M
         for day in range(5):
@@ -82,10 +87,10 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
                     for next_state in self.states: 
                         self.allP[day][hour][state][next_state] = self.allP[day][hour][state][next_state]/state_total
                         
-                    ret = np.array(rets[state])
+                    ret = np.array(rets[day][hour][state])
                     # compute self.M/self.STD
-                    self.M[state] = ret.mean()
-                    self.STD[state] = ret.std()
+                    self.allM[day][hour][state] = ret.mean()
+                    self.allSTD[day][hour][state] = ret.std()
 
         # return nothing
         return
@@ -100,10 +105,12 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
         
         # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
         # Create a copy of each state !!!!!!!!!!!!!!
-        P = self.P.copy()
-        M = self.M.copy()
-        STD = self.STD.copy()
-        rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
+        
+        allP = {day:{hour:self.new_prob() for hour in range(9,16)} for day in range(5)}
+        
+        allM = deepcopy(self.allM)
+        allSTD = deepcopy(self.allSTD)
+        rets = {day:{hour:dict(zip(self.states, [[] for i in range(len(self.states))])) for hour in range(9,16)} for day in range(5)}
         
         for rowid in range(len(last_month) - 1):
             cur_ret = last_month.iloc[rowid][self.ret_colname]
@@ -111,15 +118,15 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
             
             cur_state = self.det_state(cur_ret) # helper method defined below
             next_state = self.det_state(next_ret)
-            
+            # Get the day and hour
             time_string = last_month.iloc[rowid].name
             day = time_string.day_of_week
             time = time_string.hour
-            # just use self.allP to keep track of counts first
-            self.allP[day][time][cur_state][next_state] += 1
+            # Use P to keep track of counts first
+            allP[day][time][cur_state][next_state] += 1
 
             # std/M is more involved
-            rets[cur_state].append(cur_ret)
+            rets[day][time][cur_state].append(cur_ret)
             
         
         # compute P, STD, M
@@ -130,24 +137,28 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
                     # compute the totals for each row
                     state_total = 0
                     for next_state in self.states:
-                        state_total += self.allP[day][hour][state][next_state]
-                        
+                        state_total += allP[day][hour][state][next_state]
+                    state_total = state_total if state_total != 0 else 1
                     # compute the Probs
                     for next_state in self.states:
-                        self.allP[day][hour][state][next_state] = self.allP[day][hour][state][next_state]/state_total
+                        allP[day][hour][state][next_state] = allP[day][hour][state][next_state]/state_total
                         
-                    ret = np.array(rets[state])
+                    ret = np.array(rets[day][hour][state])
                     # compute self.M/self.STD
-                    M[state] = ret.mean()
-                    STD[state] = ret.std()
+                    # Handle no new runs
+                    allM[day][hour][state] = ret.mean() if len(ret) > 0 else allM[day][hour][state]
+                    allSTD[day][hour][state] = ret.std() if len(ret) > 0 else allSTD[day][hour][state]
         
         # Now recompute self.P, self.STD, self.M
-        for state in self.states:
-            for next_state in self.states:
-                self.P[state][next_state] = (self.P[state][next_state] + P[state][next_state])/2
-                
-            self.M[state] = (self.M[state] + M[state])/2
-            self.STD[state] = (self.STD[state] + STD[state])/2
+        # Compute per day, hour combination
+        for day in range(5):
+            for hour in range(9, 16):
+                for state in self.states:
+                    for next_state in self.states:
+                        self.allP[day][hour][state][next_state] = (self.allP[day][hour][state][next_state] + allP[day][hour][state][next_state])/2
+                        
+                    self.allM[day][hour][state] = (self.allM[day][hour][state] + allM[day][hour][state])/2
+                    self.allSTD[day][hour][state] = (self.allSTD[day][hour][state] + allSTD[day][hour][state])/2
 
         # return nothing
         return
@@ -161,7 +172,11 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
         # day = datetime.datetime.strptime(time_string, '%Y-%m-%d')
         # time = int(time_string[1][:2])
         # print(f'Changing to {day} {time}')
+        # Change self.P, self.STD, self.M to right values for current state
         self.P = self.allP[day][time]
+        self.M = self.allM[day][time]
+        self.STD = self.allSTD[day][time]
+        # print(self.M, self.STD)
         return
         
     # can write extra functions like this to be used in train
@@ -176,7 +191,7 @@ if __name__ == '__main__':
     
     
     # set up dirs in results we will use (this will be changed)
-    config = Config('.', 'changing_p', test_mode = False)
+    config = Config('.', 'changing_p', test_mode = True)
     
     
     # load data
