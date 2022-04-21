@@ -40,61 +40,60 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
 
         return self.det_state(first)
     
-    
     def init_train(self, train_data: pd.DataFrame):
-        """Modify this step to initially fill self.P with transition probs, self.M with mean returns, and self.STD with std of returns for each state.
+        ''' This Train just recomputes probability over all time. No weights for nearer times. This is just the initial train'''
+        # Compute self.P on the training data
+        # use ret_colname
         
-        You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
-        
-        Do not Return"""
-
+        # Use Base Sim reset method to set all means and P and std to 0
         self.reset() 
-
+        
+        # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
         rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
-
+        
         for rowid in range(len(train_data) - 1):
             cur_ret = train_data.iloc[rowid][self.ret_colname]
             next_ret = train_data.iloc[rowid + 1][self.ret_colname]
-
             
-            # Helpers defined above
-            cur_state = self.det_state(cur_ret) 
+            cur_state = self.det_state(cur_ret) # helper method defined below
             next_state = self.det_state(next_ret)
             
-            # use P to keep track of counts first
+            # just use self.P to keep track of counts first
             self.P[cur_state][next_state] += 1
-
             # std/M is more involved
             rets[cur_state].append(cur_ret)
         
-
         # compute self.P, self.STD and self.M
         for state in self.states:
             
             # compute the totals for each row
             state_total = 0
             for next_state in self.states:
-                # print(self.P)
                 state_total += self.P[state][next_state]
-                
+            state_total = state_total if state_total != 0 else 1
             # compute the Probs
             for next_state in self.states:
-                self.P[state][next_state] = self.P[state][next_state] / state_total
+                self.P[state][next_state] = self.P[state][next_state]/state_total
                 
             ret = np.array(rets[state])
             # compute self.M/self.STD
             self.M[state] = ret.mean()
             self.STD[state] = ret.std()
-        # print(self.P)
+        
+        
+        # return nothing
         return
     
-    
     def retrain(self, last_month: pd.DataFrame):
-        """Modify this step to continualy update self.P with transition probs, self.M with mean returns, and self.STD with std of returns for each state.
+        ''' This reTrain just recomputes probability over the last month, then averages it with the current data to form an exponential weighting of sorts. Most of the code is the same, just only on the last_month. The difference is the averaging at the end'''
         
-        You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
+        # Compute self.P on the training data
+        # use ret_colname
+
+        # do not reset data
         
-        Do not Return"""
+        # For self.STD, self.M, which is more involved computation. Initialize a dict of empty lists for each state
+        # Create a copy of each state !!!!!!!!!!!!!!
         P = deepcopy(self.P)
         # reset P
         for state in P:
@@ -103,8 +102,7 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
         M = deepcopy(self.M)
         STD = deepcopy(self.STD)
         rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
-
-        # Compute probability matrix based on last month
+        
         for rowid in range(len(last_month) - 1):
             cur_ret = last_month.iloc[rowid][self.ret_colname]
             next_ret = last_month.iloc[rowid + 1][self.ret_colname]
@@ -116,33 +114,33 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
             P[cur_state][next_state] += 1
             # std/M is more involved
             rets[cur_state].append(cur_ret)
-
-        # Compute Statistics
-        for rowid in range(len(last_month) - 1):
-            cur_ret = last_month.iloc[rowid][self.ret_colname]
-            next_ret = last_month.iloc[rowid + 1][self.ret_colname]
+        
+        # compute P, STD, M
+        for state in self.states:
             
-            cur_state = self.det_state(cur_ret) # helper method defined below
-            next_state = self.det_state(next_ret)
+            # compute the totals for each row
+            state_total = 0
+            for next_state in self.states:
+                state_total += P[state][next_state]
+            state_total = state_total if state_total != 0 else 1
+            # compute the Probs
+            for next_state in self.states:
+                P[state][next_state] = P[state][next_state]/state_total
+                
+            ret = np.array(rets[state])
+            # compute self.M/self.STD
+            M[state] = ret.mean() if len(ret) !=0 else self.M[state]
+            STD[state] = ret.std() if len(ret) != 0 else self.STD[state]
             
-            # use P to keep track of counts first
-            P[cur_state][next_state] += 1
-            # std/M is more involved
-            rets[cur_state].append(cur_ret) 
-        # print(P)
         # Now recompute self.P, self.STD, self.M
         for state in self.states:
-            rowSum = int(sum(P[state].values()))
-            rowSum = rowSum if rowSum != 0 else 1 # Handle 0 times being in the state
-
             for next_state in self.states:
-
-                self.P[state][next_state] = (self.P[state][next_state] + (P[state][next_state] / rowSum))/2
+                self.P[state][next_state] = (self.P[state][next_state] + P[state][next_state])/2
                 
             self.M[state] = (self.M[state] + M[state])/2
             self.STD[state] = (self.STD[state] + STD[state])/2
+        # return nothing
         return
-    
         
     def det_state(self, ret):
         '''Computes state of return, returns state'''
@@ -165,7 +163,7 @@ if __name__ == '__main__':
     ray.init(include_dashboard = False)
     
     # set up dirs in results we will use (this will be changed)
-    config = Config('.', 'thresholding', test_mode = False)
+    config = Config('.', 'thresholding', test_mode = True)
     
     
     # load data

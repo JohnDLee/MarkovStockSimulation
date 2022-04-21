@@ -71,7 +71,7 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             state_total = 0
             for next_state in self.states:
                 state_total += self.P[state][next_state]
-                
+            state_total = state_total if state_total != 0 else 1
             # compute the Probs
             for next_state in self.states:
                 self.P[state][next_state] = self.P[state][next_state]/state_total
@@ -123,7 +123,7 @@ class ControlSim(BaseSim): # how you inherit. (Now you have access to all of Bas
             state_total = 0
             for next_state in self.states:
                 state_total += P[state][next_state]
-                
+            state_total = state_total if state_total != 0 else 1
             # compute the Probs
             for next_state in self.states:
                 P[state][next_state] = P[state][next_state]/state_total
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     ray.init(include_dashboard = False)
     
     # set up dirs in results we will use (this will be changed)
-    config = Config('.', 'control', test_mode = False)
+    config = Config('.', 'control', test_mode = True)
     
     
     # load data
