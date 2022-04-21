@@ -83,7 +83,8 @@ class Changing_PSim(BaseSim): # how you inherit. (Now you have access to all of 
                     state_total = 0
                     for next_state in self.states:
                         state_total += self.allP[day][hour][state][next_state]
-                        
+                    state_total = state_total if state_total!= 0 else 1
+                    
                     # compute the Probs
                     for next_state in self.states: 
                         self.allP[day][hour][state][next_state] = self.allP[day][hour][state][next_state]/state_total
