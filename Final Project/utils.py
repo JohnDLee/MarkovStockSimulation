@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm, trange
 import os
+import copy
 
 class Config():
     ''' Configs for our simulations'''
@@ -226,6 +227,12 @@ class BaseSim:
         
         return np.array(run_data)
 
+    def new_prob(self):
+        new_P = copy.deepcopy(self.P)
+        for state in new_P:
+            for next_state in new_P[state]:
+                new_P[state][next_state] = 0
+        return new_P
     ###########################
     # Custom Functions to be defined in child classes
     ###########################

@@ -94,7 +94,7 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
         You are given the entire set of training data. Ensure when referencing training data, you use consistent column names or use self.ret_colname.
         
         Do not Return"""
-        P = self.P.copy()
+        P = self.new_prob()
         M = self.M.copy()
         STD = self.STD.copy()
         rets = dict(zip(self.states, [[] for i in range(len(self.states))]))
@@ -124,20 +124,18 @@ class ThresholdingSim(BaseSim): # how you inherit. (Now you have access to all o
             P[cur_state][next_state] += 1
             # std/M is more involved
             rets[cur_state].append(cur_ret) 
-
+        # print(P)
         # Now recompute self.P, self.STD, self.M
         for state in self.states:
             rowSum = int(sum(P[state].values()))
-            # print(rowSum, self.P[state])
-            # print(rowSum, [P[state][s] / rowSum for s in P[state]])
+            rowSum = rowSum if rowSum != 0 else 1 # Handle 0 times being in the state
+
             for next_state in self.states:
-                # print(self.P[state][next_state])
-                self.P[state][next_state] = (self.P[state][next_state] / rowSum + (P[state][next_state] / rowSum))/2
+
+                self.P[state][next_state] = (self.P[state][next_state] + (P[state][next_state] / rowSum))/2
                 
             self.M[state] = (self.M[state] + M[state])/2
             self.STD[state] = (self.STD[state] + STD[state])/2
-            # print(f'{state}: {self.M[state]} {self.STD[state]}')
-        # print(self.P)
         return
     
         
