@@ -313,10 +313,10 @@ class PortfolioSim():
                         continue
                     
                     # otherwise compute density of area under curve above 0
-                    sim2_ret_mean = np.exp(np.sum(simdata[ticker2][period,:,:, 0], axis = 0))
+                    sim2_ret_mean = np.exp(np.sum(simdata[ticker2][period,:,:, 0], axis = 0)).mean()
                     data = simulation_ret - sim2_ret_mean
                     weight, bins = np.histogram(data, bins = np.linspace(data.min(), data.max(), 100), density = True)
-                    mean_row.append(weight[bins[:-1] > 0].sum())
+                    mean_row.append(weight[bins[:-1] > 0].sum()/weight.sum())
                     
                 means.append(mean_row)
                 true_log_returns[ticker].append(np.sum(simdata[ticker][period,:,0, 1], axis = 0))
